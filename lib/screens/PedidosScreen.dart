@@ -1,44 +1,34 @@
 import 'package:flutter/material.dart';
 
 class PedidosScreen extends StatefulWidget {
-  final List<Map<String, dynamic>> pedidos; // Pasar aquí la lista de pedidos creados
+  final List<Map<String, dynamic>> pedidos;
 
-  const PedidosScreen({super.key, required this.pedidos});
+  const PedidosScreen({Key? key, required this.pedidos}) : super(key: key);
 
   @override
   State<PedidosScreen> createState() => _PedidosScreenState();
 }
 
 class _PedidosScreenState extends State<PedidosScreen> {
-  // Filtros
-  String? almacenFiltro;
-  String? clienteFiltro;
-  String? unidadFiltro;
+  String? almacenFiltro = '';
+  String? clienteFiltro = '';
+  String? unidadFiltro = '';
   String textoBusqueda = '';
 
-  List<String> get almacenes {
-    final set = <String>{};
-    for (var p in widget.pedidos) {
-      if (p['almacen'] != null) set.add(p['almacen']);
-    }
-    return set.toList();
-  }
+  List<String> get almacenes => {
+        for (var p in widget.pedidos)
+          if (p['almacen'] != null) p['almacen'].toString()
+      }.toList();
 
-  List<String> get clientes {
-    final set = <String>{};
-    for (var p in widget.pedidos) {
-      if (p['cliente'] != null) set.add(p['cliente']);
-    }
-    return set.toList();
-  }
+  List<String> get clientes => {
+        for (var p in widget.pedidos)
+          if (p['cliente'] != null) p['cliente'].toString()
+      }.toList();
 
-  List<String> get unidades {
-    final set = <String>{};
-    for (var p in widget.pedidos) {
-      if (p['unidad'] != null) set.add(p['unidad']);
-    }
-    return set.toList();
-  }
+  List<String> get unidades => {
+        for (var p in widget.pedidos)
+          if (p['unidad'] != null) p['unidad'].toString()
+      }.toList();
 
   List<Map<String, dynamic>> get pedidosFiltrados {
     return widget.pedidos.where((pedido) {
@@ -47,7 +37,7 @@ class _PedidosScreenState extends State<PedidosScreen> {
       final matchUnidad = unidadFiltro == null || unidadFiltro!.isEmpty || pedido['unidad'] == unidadFiltro;
       final matchTexto = textoBusqueda.isEmpty ||
           pedido['id'].toString().toLowerCase().contains(textoBusqueda.toLowerCase()) ||
-          (pedido['cliente']?.toLowerCase().contains(textoBusqueda.toLowerCase()) ?? false);
+          (pedido['cliente']?.toString().toLowerCase().contains(textoBusqueda.toLowerCase()) ?? false);
       return matchAlmacen && matchCliente && matchUnidad && matchTexto;
     }).toList();
   }
@@ -56,12 +46,17 @@ class _PedidosScreenState extends State<PedidosScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFECF0F1),
+      appBar: AppBar(
+        title: const Text('📦 Lista de Pedidos'),
+        backgroundColor: const Color(0xFF2C3E50),
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
       body: SafeArea(
         child: Column(
           children: [
-            // Filtros
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
                   Row(
@@ -69,28 +64,24 @@ class _PedidosScreenState extends State<PedidosScreen> {
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           value: almacenFiltro,
-                          decoration: InputDecoration(
-                            labelText: 'Almacén',
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          items: almacenes.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                          decoration: _inputDeco('Almacén'),
+                          items: [
+                            const DropdownMenuItem(value: '', child: Text('Todos')),
+                            ...almacenes.map((e) => DropdownMenuItem(value: e, child: Text(e))),
+                          ],
                           onChanged: (v) => setState(() => almacenFiltro = v),
-                          isExpanded: true,
-                          hint: const Text('Todos'),
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           value: clienteFiltro,
-                          decoration: InputDecoration(
-                            labelText: 'Cliente',
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          items: clientes.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                          decoration: _inputDeco('Cliente'),
+                          items: [
+                            const DropdownMenuItem(value: '', child: Text('Todos')),
+                            ...clientes.map((e) => DropdownMenuItem(value: e, child: Text(e))),
+                          ],
                           onChanged: (v) => setState(() => clienteFiltro = v),
-                          isExpanded: true,
-                          hint: const Text('Todos'),
                         ),
                       ),
                     ],
@@ -101,29 +92,24 @@ class _PedidosScreenState extends State<PedidosScreen> {
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           value: unidadFiltro,
-                          decoration: InputDecoration(
-                            labelText: 'Unidad',
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          items: unidades.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                          decoration: _inputDeco('Unidad'),
+                          items: [
+                            const DropdownMenuItem(value: '', child: Text('Todas')),
+                            ...unidades.map((e) => DropdownMenuItem(value: e, child: Text(e))),
+                          ],
                           onChanged: (v) => setState(() => unidadFiltro = v),
-                          isExpanded: true,
-                          hint: const Text('Todas'),
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         flex: 2,
-                        child: SizedBox(
-                          height: 48,
-                          child: TextField(
-                            decoration: InputDecoration(
-                              labelText: 'Buscar Pedido',
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                              suffixIcon: const Icon(Icons.search),
-                            ),
-                            onChanged: (v) => setState(() => textoBusqueda = v),
+                        child: TextField(
+                          decoration: InputDecoration(
+                            labelText: 'Buscar pedido',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            suffixIcon: const Icon(Icons.search),
                           ),
+                          onChanged: (v) => setState(() => textoBusqueda = v),
                         ),
                       ),
                     ],
@@ -131,117 +117,143 @@ class _PedidosScreenState extends State<PedidosScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 16),
-            // Tabla de pedidos
+            const SizedBox(height: 8),
             Expanded(
               child: pedidosFiltrados.isEmpty
-                  ? const Center(
-                      child: Text('No hay pedidos registrados',
-                          style: TextStyle(fontSize: 18, color: Colors.grey)),
-                    )
+                  ? const Center(child: Text('No se encontraron pedidos', style: TextStyle(fontSize: 18, color: Colors.grey)))
                   : SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: DataTable(
-                        headingRowColor: MaterialStateColor.resolveWith((states) => const Color(0xFFE0E0E0)),
+                        columnSpacing: 20,
+                        dataRowMinHeight: 60,
+                        headingRowColor: MaterialStateColor.resolveWith((states) => const Color(0xFF2C3E50)),
+                        headingTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                         columns: const [
-                          DataColumn(label: Text('ID', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Cliente', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Almacén', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Unidad', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Fecha', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Estado', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Total', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Cantidad', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Producto', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Unidad', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('P. Unitario', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Stock', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Acciones', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Ver')),
+                          DataColumn(label: Text('ID')),
+                          DataColumn(label: Text('Cliente')),
+                          DataColumn(label: Text('Almacén')),
+                          DataColumn(label: Text('Unidad')),
+                          DataColumn(label: Text('Fecha')),
+                          DataColumn(label: Text('Estado')),
+                          DataColumn(label: Text('Total')),
+                          DataColumn(label: Text('Productos')),
+                          DataColumn(label: Text('Acciones')),
                         ],
                         rows: pedidosFiltrados.map((pedido) {
-                          return DataRow(
-                            cells: [
-                              DataCell(Text(pedido['id'].toString())),
-                              DataCell(Text(pedido['cliente'] ?? '')),
-                              DataCell(Text(pedido['almacen'] ?? '')),
-                              DataCell(Text(pedido['unidad'] ?? '')),
-                              DataCell(Text(pedido['fecha'] ?? '')),
-                              DataCell(
-                                Chip(
-                                  label: Text(
-                                    pedido['estado'] ?? '',
-                                    style: TextStyle(
-                                      color: pedido['estado'] == 'Completado'
-                                          ? Colors.green[800]
-                                          : Colors.orange[800],
-                                    ),
+                          return DataRow(cells: [
+                            DataCell(Center(child: Text(pedido['id'].toString()))),
+                            DataCell(Text(pedido['cliente'] ?? 'N/A')),
+                            DataCell(Text(pedido['almacen'] ?? 'N/A')),
+                            DataCell(Text(pedido['unidad'] ?? 'N/A')),
+                            DataCell(Text(pedido['fecha'] ?? 'N/A')),
+                            DataCell(
+                              Chip(
+                                label: Text(
+                                  pedido['estado'] ?? 'N/A',
+                                  style: TextStyle(
+                                    color: pedido['estado'] == 'Completado'
+                                        ? Colors.green[800]
+                                        : Colors.orange[800],
                                   ),
-                                  backgroundColor: pedido['estado'] == 'Completado'
-                                      ? Colors.green[100]
-                                      : Colors.orange[100],
                                 ),
+                                backgroundColor: pedido['estado'] == 'Completado'
+                                    ? Colors.green[100]
+                                    : Colors.orange[100],
                               ),
-                              DataCell(Text('\$${pedido['total']?.toStringAsFixed(2) ?? '0.00'}')),
-                              // Nuevas celdas para productos
-                              DataCell(Text(pedido['productos']?[0]['cantidad']?.toString() ?? '')),
-                              DataCell(Text(pedido['productos']?[0]['nombre'] ?? '')),
-                              DataCell(Text(pedido['unidad'] ?? '')),
-                              DataCell(Text('\$${pedido['productos']?[0]['precio']?.toStringAsFixed(2) ?? '0.00'}')),
-                              DataCell(Text(pedido['productos']?[0]['stock']?.toString() ?? '')),
-                              DataCell(
-                                IconButton(
-                                  icon: const Icon(Icons.edit, color: Colors.blue),
-                                  onPressed: () {
-                                    // Acción de editar
-                                  },
-                                ),
+                            ),
+                            DataCell(Text('\$${pedido['total']?.toStringAsFixed(2) ?? '0.00'}')),
+                            DataCell(Text('${(pedido['productos'] as List?)?.length ?? 0} productos',
+                                style: const TextStyle(color: Colors.blue))),
+                            DataCell(
+                              Row(
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.edit, color: Colors.blue),
+                                    onPressed: () {},
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.remove_red_eye, color: Colors.green),
+                                    onPressed: () => _mostrarDetallePedido(context, pedido),
+                                  ),
+                                ],
                               ),
-                              DataCell(
-                                IconButton(
-                                  icon: const Icon(Icons.remove_red_eye, color: Color(0xFF2C3E50)),
-                                  onPressed: () {
-                                    showDialog(
-                                      context: context,
-                                      builder: (context) => AlertDialog(
-                                        title: const Text('Detalle del Pedido'),
-                                        content: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            ...((pedido['productos'] as List)
-                                                .map((prod) => ListTile(
-                                                      title: Text(prod['nombre']),
-                                                      subtitle: Text('Cantidad: ${prod['cantidad']} - Unidad: ${pedido['unidad'] ?? ''}'),
-                                                      trailing: Text('\$${prod['precio']?.toStringAsFixed(2) ?? '0.00'}'),
-                                                    ))
-                                                .toList()),
-                                            const Divider(),
-                                            Align(
-                                              alignment: Alignment.centerRight,
-                                              child: Text('Total: \$${pedido['total']?.toStringAsFixed(2) ?? '0.00'}',
-                                                style: const TextStyle(fontWeight: FontWeight.bold)),
-                                            ),
-                                          ],
-                                        ),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () => Navigator.pop(context),
-                                            child: const Text('Cerrar'),
-                                          )
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
-                          );
+                            ),
+                          ]);
                         }).toList(),
                       ),
                     ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  InputDecoration _inputDeco(String label) {
+    return InputDecoration(
+      labelText: label,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+    );
+  }
+
+  void _mostrarDetallePedido(BuildContext context, Map<String, dynamic> pedido) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('Pedido #${pedido['id']}'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildInfoRow('Cliente:', pedido['cliente']),
+              _buildInfoRow('Almacén:', pedido['almacen']),
+              _buildInfoRow('Unidad:', pedido['unidad']),
+              _buildInfoRow('Fecha:', pedido['fecha']),
+              _buildInfoRow('Estado:', pedido['estado']),
+              const SizedBox(height: 10),
+              const Text('Productos:', style: TextStyle(fontWeight: FontWeight.bold)),
+              const Divider(),
+              ...(pedido['productos'] as List? ?? []).map((p) {
+                final total = (p['cantidad'] ?? 0) * (p['precio'] ?? 0);
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Expanded(flex: 3, child: Text(p['nombre'] ?? 'Producto')),
+                      Expanded(child: Text('${p['cantidad']} x')),
+                      Expanded(child: Text('\$${(p['precio'] ?? 0).toStringAsFixed(2)}')),
+                      Expanded(child: Text('\$${total.toStringAsFixed(2)}', textAlign: TextAlign.end)),
+                    ],
+                  ),
+                );
+              }),
+              const Divider(),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  'Total: \$${pedido['total']?.toStringAsFixed(2) ?? '0.00'}',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cerrar')),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(width: 8),
+          Expanded(child: Text(value)),
+        ],
       ),
     );
   }
