@@ -14,17 +14,15 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Distribuidora Magaña',
       theme: ThemeData(
-        primarySwatch: Colors.blue,
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-        appBarTheme: const AppBarTheme(
-          centerTitle: true,
-          elevation: 2,
-          shadowColor: Colors.black26,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(
-              bottom: Radius.circular(10),
-            ),
-          ),
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.indigo,
+          brightness: Brightness.light,
+        ),
+        textTheme: const TextTheme(
+          headlineSmall: TextStyle(fontWeight: FontWeight.bold),
+          titleMedium: TextStyle(fontWeight: FontWeight.w600),
+          bodyMedium: TextStyle(fontSize: 14),
         ),
       ),
       home: const MainNavigationScreen(),
@@ -42,230 +40,268 @@ class MainNavigationScreen extends StatefulWidget {
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
-  final List<Widget> _screens = [
-    const EmbarqueScreen(),
-    const PedidosScreen(pedidos: []), // Aquí pasas tu lista real de pedidos
+
+  final List<Widget> _screens = const [
+    DashboardScreen(),
+    EmbarqueScreen(),
+    PedidosScreen(pedidos: []),
+  ];
+
+  final List<String> _titles = const [
+    "Inicio",
+    "Embarque",
+    "Pedidos",
   ];
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Distribuidora Magaña',
-            style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.5)),
-        backgroundColor: const Color(0xFF1A2C38),
-        foregroundColor: Colors.white,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(
-            bottom: Radius.circular(15),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bool isLargeScreen = constraints.maxWidth >= 1000; // escritorio
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(_titles[_currentIndex]),
+            centerTitle: true,
+            backgroundColor: Theme.of(context).colorScheme.primary,
+            foregroundColor: Colors.white,
           ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications, size: 26),
-            onPressed: () {},
-            tooltip: 'Notificaciones',
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      drawer: _buildDrawer(context),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFF5F7FA), Color(0xFFE4E7EB)],
-          ),
-        ),
-        child: _screens[_currentIndex],
-      ),
-      bottomNavigationBar: _buildBottomNavBar(),
-    );
-  }
-
-  Widget _buildBottomNavBar() {
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
-      child: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
-        backgroundColor: const Color(0xFF1A2C38),
-        selectedItemColor: Colors.white,
-        unselectedItemColor: Colors.white70,
-        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500),
-        type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.local_shipping),
-            label: 'Embarque',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.shopping_cart),
-            label: 'Pedidos',
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDrawer(BuildContext context) {
-    return Drawer(
-      width: MediaQuery.of(context).size.width * 0.75,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.horizontal(right: Radius.circular(20)),
-      ),
-      elevation: 10,
-      child: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF1A2C38), Color(0xFF3A5668)],
-          ),
-          borderRadius: BorderRadius.horizontal(right: Radius.circular(20)),
-        ),
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView(
-                padding: EdgeInsets.zero,
-                children: [
-                  _buildDrawerHeader(),
-                  _buildDrawerItem(
-                    context,
-                    icon: Icons.local_shipping,
-                    title: 'Embarque',
-                    index: 0,
+          drawer: isLargeScreen ? null : _buildDrawer(),
+          body: SafeArea(
+            child: Row(
+              children: [
+                if (isLargeScreen) _buildNavigationRail(),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    child: _screens[_currentIndex],
                   ),
-                  _buildDrawerItem(
-                    context,
-                    icon: Icons.shopping_cart,
-                    title: 'Pedidos',
-                    index: 1,
-                  ),
-                  _buildDrawerItem(
-                    context,
-                    icon: Icons.assessment,
-                    title: 'Reportes',
-                    onTap: () {},
-                  ),
-                  _buildDrawerItem(
-                    context,
-                    icon: Icons.people,
-                    title: 'Clientes',
-                    onTap: () {},
-                  ),
-                  const Divider(color: Colors.white54, height: 20),
-                  _buildDrawerItem(
-                    context,
-                    icon: Icons.settings,
-                    title: 'Configuración',
-                    onTap: () {},
-                  ),
-                  _buildDrawerItem(
-                    context,
-                    icon: Icons.help,
-                    title: 'Ayuda',
-                    onTap: () {},
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Text(
-                'Versión 1.0.0',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.7),
-                  fontSize: 12,
                 ),
-              ),
+              ],
             ),
+          ),
+          bottomNavigationBar:
+              isLargeScreen ? null : _buildBottomNavigationBar(),
+        );
+      },
+    );
+  }
+
+  Widget _buildBottomNavigationBar() {
+    return NavigationBar(
+      selectedIndex: _currentIndex,
+      onDestinationSelected: (i) => setState(() => _currentIndex = i),
+      destinations: const [
+        NavigationDestination(
+          icon: Icon(Icons.dashboard_outlined),
+          selectedIcon: Icon(Icons.dashboard, color: Colors.indigo),
+          label: "Inicio",
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.local_shipping_outlined),
+          selectedIcon: Icon(Icons.local_shipping, color: Colors.indigo),
+          label: "Embarque",
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.shopping_cart_outlined),
+          selectedIcon: Icon(Icons.shopping_cart, color: Colors.indigo),
+          label: "Pedidos",
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNavigationRail() {
+    return NavigationRail(
+      selectedIndex: _currentIndex,
+      onDestinationSelected: (i) => setState(() => _currentIndex = i),
+      labelType: NavigationRailLabelType.all,
+      backgroundColor: Colors.grey.shade100,
+      destinations: const [
+        NavigationRailDestination(
+          icon: Icon(Icons.dashboard_outlined),
+          selectedIcon: Icon(Icons.dashboard, color: Colors.indigo),
+          label: Text("Inicio"),
+        ),
+        NavigationRailDestination(
+          icon: Icon(Icons.local_shipping_outlined),
+          selectedIcon: Icon(Icons.local_shipping, color: Colors.indigo),
+          label: Text("Embarque"),
+        ),
+        NavigationRailDestination(
+          icon: Icon(Icons.shopping_cart_outlined),
+          selectedIcon: Icon(Icons.shopping_cart, color: Colors.indigo),
+          label: Text("Pedidos"),
+        ),
+      ],
+    );
+  }
+
+  Drawer _buildDrawer() {
+    return Drawer(
+      child: Column(
+        children: [
+          UserAccountsDrawerHeader(
+            decoration: BoxDecoration(
+              color: Colors.indigo.shade700,
+            ),
+            currentAccountPicture: const CircleAvatar(
+              backgroundColor: Colors.white,
+              child: Icon(Icons.business, color: Colors.indigo, size: 36),
+            ),
+            accountName: const Text(
+              "Distribuidora Magaña",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            accountEmail: const Text("Administración de distribución"),
+          ),
+          ListTile(
+            leading: const Icon(Icons.dashboard_outlined),
+            title: const Text("Inicio"),
+            selected: _currentIndex == 0,
+            onTap: () {
+              setState(() => _currentIndex = 0);
+              Navigator.pop(context);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.local_shipping_outlined),
+            title: const Text("Embarque"),
+            selected: _currentIndex == 1,
+            onTap: () {
+              setState(() => _currentIndex = 1);
+              Navigator.pop(context);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.shopping_cart_outlined),
+            title: const Text("Pedidos"),
+            selected: _currentIndex == 2,
+            onTap: () {
+              setState(() => _currentIndex = 2);
+              Navigator.pop(context);
+            },
+          ),
+          const Spacer(),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.settings),
+            title: const Text("Configuración"),
+            onTap: () {},
+          ),
+          ListTile(
+            leading: const Icon(Icons.help_outline),
+            title: const Text("Ayuda"),
+            onTap: () {},
+          ),
+          const SizedBox(height: 10),
+          Text(
+            "Versión 1.0.0",
+            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+          ),
+          const SizedBox(height: 10),
+        ],
+      ),
+    );
+  }
+}
+
+/// DASHBOARD 100% RESPONSIVO
+class DashboardScreen extends StatelessWidget {
+  const DashboardScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final double w = MediaQuery.of(context).size.width;
+    // Escala suave para tipografías/íconos según ancho
+    final double scale = (w / 390).clamp(0.85, 1.25);
+
+    final cards = [
+      _DashboardCard(
+        title: "Pedidos",
+        value: "128",
+        icon: Icons.shopping_cart,
+        color: Colors.indigo,
+        scale: scale,
+      ),
+      _DashboardCard(
+        title: "Embarques",
+        value: "42",
+        icon: Icons.local_shipping,
+        color: Colors.green,
+        scale: scale,
+      ),
+      _DashboardCard(
+        title: "Clientes",
+        value: "87",
+        icon: Icons.people,
+        color: Colors.orange,
+        scale: scale,
+      ),
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      // Grid adaptable por ANCHO: agrega/quita columnas automáticamente
+      child: GridView.builder(
+        itemCount: cards.length,
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 280,      // ancho máximo por tarjeta
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          childAspectRatio: 1.05,       // ↑ más alto para evitar overflow
+        ),
+        itemBuilder: (_, i) => cards[i],
+      ),
+    );
+  }
+}
+
+class _DashboardCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color color;
+  final double scale;
+
+  const _DashboardCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+    required this.scale,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final TextStyle valueStyle = Theme.of(context)
+        .textTheme
+        .headlineSmall!
+        .copyWith(color: color, fontSize: 24 * scale);
+
+    final TextStyle titleStyle =
+        Theme.of(context).textTheme.titleMedium!.copyWith(fontSize: 15 * scale);
+
+    final double avatarRadius = 28 * scale;
+    final double iconSize = 28 * scale;
+
+    return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly, // reparte altura
+          mainAxisSize: MainAxisSize.max,
+          children: [
+            CircleAvatar(
+              backgroundColor: color.withOpacity(0.15),
+              radius: avatarRadius,
+              child: Icon(icon, color: color, size: iconSize),
+            ),
+            Text(value, style: valueStyle, maxLines: 1),
+            Text(title, style: titleStyle, maxLines: 1, overflow: TextOverflow.ellipsis),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildDrawerHeader() {
-    return Container(
-      height: 180,
-      decoration: const BoxDecoration(
-        color: Color(0xFF1A2C38),
-        borderRadius: BorderRadius.only(
-          topRight: Radius.circular(20),
-        ),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white.withOpacity(0.1),
-              border: Border.all(color: Colors.white54, width: 2),
-            ),
-            child: const Icon(Icons.inventory, size: 40, color: Colors.white),
-          ),
-          const SizedBox(height: 15),
-          const Text(
-            'Distribuidora Magaña',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.2,
-            ),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            'Administración de distribución',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.8),
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDrawerItem(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    int? index,
-    VoidCallback? onTap,
-  }) {
-    final isSelected = index != null && _currentIndex == index;
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: isSelected
-            ? Colors.white.withOpacity(0.15)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: ListTile(
-        leading: Icon(icon,
-            color: isSelected ? Colors.white : Colors.white.withOpacity(0.8)),
-        title: Text(title,
-            style: TextStyle(
-              color: isSelected ? Colors.white : Colors.white.withOpacity(0.9),
-              fontWeight: isSelected ? FontWeight.w500 : FontWeight.w400,
-            )),
-        onTap: onTap ?? () {
-          if (index != null) {
-            setState(() => _currentIndex = index);
-          }
-          Navigator.pop(context);
-        },
       ),
     );
   }
