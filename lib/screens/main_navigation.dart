@@ -12,7 +12,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Distribuidora Magaña',
+      title: 'Triton Software',
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
@@ -48,9 +48,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   ];
 
   final List<String> _titles = const [
-    "Inicio",
-    "Embarque",
-    "Pedidos",
+    "TRITON SOFTWARE",
+    "TRITON SOFTWARE",
+    "TRITON SOFTWARE",
   ];
 
   @override
@@ -79,8 +79,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               ],
             ),
           ),
-          bottomNavigationBar:
-              isLargeScreen ? null : _buildBottomNavigationBar(),
+          bottomNavigationBar: isLargeScreen
+              ? null
+              : _buildBottomNavigationBar(),
         );
       },
     );
@@ -141,18 +142,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       child: Column(
         children: [
           UserAccountsDrawerHeader(
-            decoration: BoxDecoration(
-              color: Colors.indigo.shade700,
-            ),
+            decoration: BoxDecoration(color: Colors.indigo.shade700),
             currentAccountPicture: const CircleAvatar(
               backgroundColor: Colors.white,
               child: Icon(Icons.business, color: Colors.indigo, size: 36),
             ),
             accountName: const Text(
-              "Distribuidora Magaña",
+              "TRITON SOFTWARE",
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
-            accountEmail: const Text("Administración de distribución"),
+            accountEmail: const Text("Arturo Díaz"),
           ),
           ListTile(
             leading: const Icon(Icons.dashboard_outlined),
@@ -245,10 +244,10 @@ class DashboardScreen extends StatelessWidget {
       child: GridView.builder(
         itemCount: cards.length,
         gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 280,      // ancho máximo por tarjeta
+          maxCrossAxisExtent: 280, // ancho máximo por tarjeta
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
-          childAspectRatio: 1.05,       // ↑ más alto para evitar overflow
+          childAspectRatio: 1.05, // ↑ más alto para evitar overflow
         ),
         itemBuilder: (_, i) => cards[i],
       ),
@@ -273,13 +272,13 @@ class _DashboardCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle valueStyle = Theme.of(context)
-        .textTheme
-        .headlineSmall!
-        .copyWith(color: color, fontSize: 24 * scale);
+    final TextStyle valueStyle = Theme.of(
+      context,
+    ).textTheme.headlineSmall!.copyWith(color: color, fontSize: 24 * scale);
 
-    final TextStyle titleStyle =
-        Theme.of(context).textTheme.titleMedium!.copyWith(fontSize: 15 * scale);
+    final TextStyle titleStyle = Theme.of(
+      context,
+    ).textTheme.titleMedium!.copyWith(fontSize: 15 * scale);
 
     final double avatarRadius = 28 * scale;
     final double iconSize = 28 * scale;
@@ -299,7 +298,12 @@ class _DashboardCard extends StatelessWidget {
               child: Icon(icon, color: color, size: iconSize),
             ),
             Text(value, style: valueStyle, maxLines: 1),
-            Text(title, style: titleStyle, maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(
+              title,
+              style: titleStyle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
         ),
       ),
