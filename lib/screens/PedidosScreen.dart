@@ -1,4 +1,3 @@
-// pedidos_screen.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -39,6 +38,42 @@ class _PedidoStore {
   }
 }
 
+/// ===== Catálogos (nombres reales de ejemplo) =====
+const List<String> _almacenesCatalogo = <String>[
+  'Matriz Cancún',
+  'Sucursal Mérida',
+  'Centro CDMX',
+];
+
+const List<String> _clientesCatalogo = <String>[
+  'Grupo Sol Naciente',
+  'Ferretería La Paz',
+  'Hotel Chichén Resort',
+  'Constructora Mayab',
+  'Servicios Riviera',
+];
+
+const List<String> _unidadesCatalogo = <String>[
+  'Bulto',
+  'Caja',
+  'Pieza',
+  'Kilo',
+];
+
+/// Productos de referencia (sugerencias para autocompletar)
+const List<String> _productosSugeridos = <String>[
+  'Cemento Gris 50kg',
+  'Varilla 3/8"',
+  'Arena Fina m³',
+  'Grava 3/4 m³',
+  'Pintura Vinílica 19L',
+  'Yeso 25kg',
+  'Adhesivo cerámico 20kg',
+  'Cable THW 12 AWG',
+  'Tubo PVC 1"',
+  'Mortero Impermeabilizante 20kg',
+];
+
 class PedidosScreen extends StatefulWidget {
   final List<Map<String, dynamic>> pedidos;
   const PedidosScreen({Key? key, this.pedidos = const []}) : super(key: key);
@@ -48,6 +83,7 @@ class PedidosScreen extends StatefulWidget {
 }
 
 class _PedidosScreenState extends State<PedidosScreen> {
+  // --- Filtros de listado ---
   String? almacenFiltro = '';
   String? clienteFiltro = '';
   String? unidadFiltro = '';
@@ -56,8 +92,20 @@ class _PedidosScreenState extends State<PedidosScreen> {
   final ScrollController _tableHCtrl = ScrollController();
   final ScrollController _dialogTableHCtrl = ScrollController();
 
+  // --- Estado general ---
   List<Map<String, dynamic>> _pedidos = [];
   bool _cargando = true;
+
+  // --- Constructor de pedido (nuevo pedido en curso) ---
+  String? _almacenSel = '';
+  String? _clienteSel = '';
+  String? _unidadSel = '';
+
+  final TextEditingController _productoCtrl = TextEditingController();
+  final TextEditingController _precioCtrl = TextEditingController();
+
+  // Ítems (líneas) del pedido actual
+  final List<Map<String, dynamic>> _itemsActuales = [];
 
   @override
   void initState() {
@@ -67,12 +115,24 @@ class _PedidosScreenState extends State<PedidosScreen> {
 
   Future<void> _cargarYFusionar() async {
     final guardados = await _PedidoStore.load();
+
+    // Normaliza entrantes
     final entrantes = widget.pedidos
-        .map((p) => {...p, 'estado': (p['estado']?.toString() ?? 'Pendiente')})
+        .map((p) => {
+              ...p,
+              'estado': (p['estado']?.toString() ?? 'Pendiente'),
+              'productos': List<Map<String, dynamic>>.from((p['productos'] as List?) ?? []),
+            })
         .toList();
 
+    // Fusionar por id
     final mapa = <dynamic, Map<String, dynamic>>{
-      for (final p in guardados) p['id']: {...p, 'estado': (p['estado']?.toString() ?? 'Pendiente')}
+      for (final p in guardados)
+        p['id']: {
+          ...p,
+          'estado': (p['estado']?.toString() ?? 'Pendiente'),
+          'productos': List<Map<String, dynamic>>.from((p['productos'] as List?) ?? []),
+        }
     };
     for (final p in entrantes) {
       mapa[p['id']] = p;
@@ -85,20 +145,32 @@ class _PedidosScreenState extends State<PedidosScreen> {
 
   Future<void> _persistir() async => _PedidoStore.saveAll(_pedidos);
 
-  List<String> get almacenes => {
-        for (var p in _pedidos)
-          if (p['almacen'] != null) p['almacen'].toString()
-      }.toList();
+  List<String> get almacenes {
+    final set = {
+      ..._almacenesCatalogo,
+      for (var p in _pedidos)
+        if (p['almacen'] != null) p['almacen'].toString(),
+    };
+    return set.toList();
+  }
 
-  List<String> get clientes => {
-        for (var p in _pedidos)
-          if (p['cliente'] != null) p['cliente'].toString()
-      }.toList();
+  List<String> get clientes {
+    final set = {
+      ..._clientesCatalogo,
+      for (var p in _pedidos)
+        if (p['cliente'] != null) p['cliente'].toString(),
+    };
+    return set.toList();
+  }
 
-  List<String> get unidades => {
-        for (var p in _pedidos)
-          if (p['unidad'] != null) p['unidad'].toString()
-      }.toList();
+  List<String> get unidades {
+    final set = {
+      ..._unidadesCatalogo,
+      for (var p in _pedidos)
+        if (p['unidad'] != null) p['unidad'].toString(),
+    };
+    return set.toList();
+  }
 
   List<Map<String, dynamic>> get pedidosFiltrados {
     return _pedidos.where((pedido) {
@@ -116,6 +188,8 @@ class _PedidosScreenState extends State<PedidosScreen> {
   void dispose() {
     _tableHCtrl.dispose();
     _dialogTableHCtrl.dispose();
+    _productoCtrl.dispose();
+    _precioCtrl.dispose();
     super.dispose();
   }
 
@@ -139,7 +213,7 @@ class _PedidosScreenState extends State<PedidosScreen> {
     final pedido = _pedidos[idx];
     final productos = List<Map<String, dynamic>>.from((pedido['productos'] as List?) ?? []);
 
-    // Eliminar de 'productos' los que se pagaron (match por nombre, unidad, precio y cantidad)
+    // Eliminar productos pagados (match por nombre, unidad, precio y cantidad)
     for (final pag in itemsPagados) {
       productos.removeWhere((p) =>
           (p['nombre'] ?? '') == (pag['nombre'] ?? '') &&
@@ -152,22 +226,16 @@ class _PedidosScreenState extends State<PedidosScreen> {
     final nuevoTotal = productos.fold<num>(0, (s, p) => s + ((p['cantidad'] ?? 0) as num) * ((p['precio'] ?? 0) as num));
 
     if (productos.isEmpty) {
-      // ✅ Si ya no hay productos, ELIMINAMOS el pedido de la lista y del store.
       final eliminado = _pedidos.removeAt(idx);
       await _PedidoStore.removeById(eliminado['id']);
-
       setState(() {});
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Pedido liquidado y removido de la lista.'),
-            backgroundColor: Color(0xFF059669),
-          ),
+          const SnackBar(content: Text('Pedido liquidado y removido de la lista.'), backgroundColor: Color(0xFF059669)),
         );
       }
       return;
     } else {
-      // Pago parcial: actualizamos productos, total y estado.
       _pedidos[idx] = {
         ...pedido,
         'productos': productos,
@@ -181,10 +249,7 @@ class _PedidosScreenState extends State<PedidosScreen> {
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Pago aplicado: ${itemsPagados.length} ítem(s).'),
-          backgroundColor: const Color(0xFF059669),
-        ),
+        SnackBar(content: Text('Pago aplicado: ${itemsPagados.length} ítem(s).'), backgroundColor: const Color(0xFF059669)),
       );
     }
   }
@@ -193,8 +258,7 @@ class _PedidosScreenState extends State<PedidosScreen> {
     required Map<String, dynamic> pedido,
     required List<Map<String, dynamic>> productosSeleccionados,
   }) async {
-    final total = productosSeleccionados.fold<num>(
-        0, (s, p) => s + ((p['cantidad'] ?? 0) as num) * ((p['precio'] ?? 0) as num));
+    final total = productosSeleccionados.fold<num>(0, (s, p) => s + ((p['cantidad'] ?? 0) as num) * ((p['precio'] ?? 0) as num));
 
     final result = await Navigator.of(context).push<Map<String, dynamic>>(
       MaterialPageRoute(
@@ -206,15 +270,10 @@ class _PedidosScreenState extends State<PedidosScreen> {
       ),
     );
 
-    // ======= Recibir resultado del pago para limpiar =======
     if (result != null && result['pagado'] == true) {
       final itemsPagados = (result['itemsPagados'] as List).map((e) => Map<String, dynamic>.from(e)).toList();
       final monto = (result['monto'] as num?)?.toDouble() ?? 0.0;
-      await _aplicarPago(
-        idPedido: pedido['id'],
-        itemsPagados: itemsPagados,
-        montoPagado: monto,
-      );
+      await _aplicarPago(idPedido: pedido['id'], itemsPagados: itemsPagados, montoPagado: monto);
     }
   }
 
@@ -241,9 +300,117 @@ class _PedidosScreenState extends State<PedidosScreen> {
     }
   }
 
+  // ====== LÓGICA DEL CONSTRUCTOR DE PEDIDO ======
+  void _agregarItemActual() {
+    final prod = _productoCtrl.text.trim();
+    final precioTxt = _precioCtrl.text.trim().replaceAll(',', '.');
+
+    if ((_almacenSel ?? '').isEmpty) {
+      _toastWarn('Selecciona un almacén');
+      return;
+    }
+    if ((_clienteSel ?? '').isEmpty) {
+      _toastWarn('Selecciona un cliente');
+      return;
+    }
+    if ((_unidadSel ?? '').isEmpty) {
+      _toastWarn('Selecciona una unidad');
+      return;
+    }
+    if (prod.isEmpty) {
+      _toastWarn('Escribe el nombre del producto');
+      return;
+    }
+    final precio = double.tryParse(precioTxt) ?? -1;
+    if (precio <= 0) {
+      _toastWarn('Ingresa un precio válido');
+      return;
+    }
+
+    setState(() {
+      _itemsActuales.add({
+        'nombre': prod,
+        'unidad': _unidadSel,
+        'precio': precio,
+        'cantidad': 1.0,
+      });
+      _productoCtrl.clear();
+      _precioCtrl.clear();
+    });
+  }
+
+  void _guardarPedidoActual() async {
+    if ((_almacenSel ?? '').isEmpty || (_clienteSel ?? '').isEmpty) {
+      _toastWarn('Selecciona almacén y cliente');
+      return;
+    }
+    if (_itemsActuales.isEmpty) {
+      _toastWarn('Agrega al menos un ítem');
+      return;
+    }
+
+    final total = _itemsActuales.fold<num>(0, (s, p) => s + ((p['cantidad'] ?? 0) as num) * ((p['precio'] ?? 0) as num));
+
+    final nuevo = {
+      'id': DateTime.now().millisecondsSinceEpoch,
+      'cliente': _clienteSel,
+      'almacen': _almacenSel,
+      'unidad': _unidadSel, // unidad general elegida
+      'fecha': DateTime.now().toString().substring(0, 19),
+      'estado': 'Pendiente',
+      'total': (total as num).toDouble(),
+      'productos': _itemsActuales.map((e) => {
+            'nombre': e['nombre'],
+            'unidad': e['unidad'],
+            'precio': e['precio'],
+            'cantidad': e['cantidad'],
+          }).toList(),
+    };
+
+    setState(() {
+      _pedidos.insert(0, nuevo);
+      _itemsActuales.clear();
+    });
+    await _persistir();
+
+    _toastOk('Pedido guardado (#${nuevo['id']})');
+  }
+
+  void _cambiarCantidadItem(int index, double delta) {
+    setState(() {
+      final actual = (_itemsActuales[index]['cantidad'] as num?)?.toDouble() ?? 0.0;
+      final nuevo = (actual + delta).clamp(0.0, 999999.0);
+      _itemsActuales[index]['cantidad'] = nuevo;
+      if (nuevo == 0.0) {
+        _itemsActuales.removeAt(index);
+      }
+    });
+  }
+
+  double _totalActual() {
+    return _itemsActuales.fold<double>(
+      0.0,
+      (s, p) => s + ((p['cantidad'] ?? 0) as num).toDouble() * ((p['precio'] ?? 0) as num).toDouble(),
+    );
+  }
+
+  void _toastWarn(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: Colors.orange),
+    );
+  }
+
+  void _toastOk(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: const Color(0xFF059669)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // evita overflow con teclado mostrando scroll
+      resizeToAvoidBottomInset: true,
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFFF6F8FB), Color(0xFFE9EDF3)]),
@@ -258,8 +425,9 @@ class _PedidosScreenState extends State<PedidosScreen> {
                     final bool isMedium = w >= 700 && w < 1100;
                     final double fieldWidth = isSmall ? w : (isMedium ? (w - 64) / 2 : (w - 96) / 3);
 
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                    // ====== Usamos ListView para evitar overflow vertical ======
+                    return ListView(
+                      padding: const EdgeInsets.only(bottom: 16),
                       children: [
                         const Padding(
                           padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -267,7 +435,169 @@ class _PedidosScreenState extends State<PedidosScreen> {
                         ),
                         const SizedBox(height: 12),
 
-                        // FILTROS + BÚSQUEDA
+                        // ================= CONSTRUCTOR DE PEDIDO =================
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: _CardWrap(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                // FILA DE SELECCIONES
+                                Wrap(
+                                  spacing: 16,
+                                  runSpacing: 12,
+                                  children: [
+                                    SizedBox(
+                                      width: fieldWidth,
+                                      child: _buildFilterDropdown(
+                                        value: _almacenSel ?? '',
+                                        items: almacenes,
+                                        hint: 'Selecciona un almacén',
+                                        label: 'Almacén',
+                                        icon: Icons.store_mall_directory_outlined,
+                                        onChanged: (v) => setState(() => _almacenSel = v),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: fieldWidth,
+                                      child: _buildFilterDropdown(
+                                        value: _clienteSel ?? '',
+                                        items: clientes,
+                                        hint: 'Selecciona un cliente',
+                                        label: 'Cliente',
+                                        icon: Icons.person_outline,
+                                        onChanged: (v) => setState(() => _clienteSel = v),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: fieldWidth,
+                                      child: _buildFilterDropdown(
+                                        value: _unidadSel ?? '',
+                                        items: unidades,
+                                        hint: 'Selecciona una unidad',
+                                        label: 'Unidad',
+                                        icon: Icons.local_shipping_outlined,
+                                        onChanged: (v) => setState(() => _unidadSel = v),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+
+                                // BUSCADOR DE PRODUCTO + PRECIO + AGREGAR
+                                Wrap(
+                                  spacing: 12,
+                                  runSpacing: 12,
+                                  crossAxisAlignment: WrapCrossAlignment.end,
+                                  children: [
+                                    SizedBox(
+                                      width: isSmall ? w : (isMedium ? fieldWidth : (fieldWidth * 2 + 16)),
+                                      child: _ProductoAutocomplete(
+                                        controller: _productoCtrl,
+                                        label: 'Producto',
+                                        hint: 'Escribe el nombre del producto…',
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: isSmall ? w : fieldWidth / 2,
+                                      child: TextField(
+                                        controller: _precioCtrl,
+                                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                        decoration: InputDecoration(
+                                          labelText: 'Precio',
+                                          hintText: '0.00',
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          focusedBorder: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10)), borderSide: BorderSide(color: Color(0xFF3B82F6))),
+                                          filled: true,
+                                          fillColor: const Color(0xFFF8FAFC),
+                                          prefixIcon: const Icon(Icons.sell_outlined, color: Color(0xFF64748B)),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                        ),
+                                      ),
+                                    ),
+                                    ElevatedButton.icon(
+                                      onPressed: _agregarItemActual,
+                                      icon: const Icon(Icons.add),
+                                      label: const Text('Agregar ítem'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF3B82F6),
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+
+                                const SizedBox(height: 16),
+
+                                // TABLA DE ÍTEMS ACTUALES
+                                if (_itemsActuales.isEmpty)
+                                  Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF8FAFC),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                                    ),
+                                    child: const Text('Agrega productos para este pedido.', style: TextStyle(color: Color(0xFF64748B))),
+                                  )
+                                else
+                                  _TablaItemsActuales(
+                                    items: _itemsActuales,
+                                    onInc: (i) => _cambiarCantidadItem(i, 1),
+                                    onDec: (i) => _cambiarCantidadItem(i, -1),
+                                    onRemove: (i) => setState(() => _itemsActuales.removeAt(i)),
+                                  ),
+
+                                const SizedBox(height: 12),
+
+                                // FOOTER DEL CONSTRUCTOR
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        'Total actual: \$${_totalActual().toStringAsFixed(2)}',
+                                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF059669)),
+                                      ),
+                                    ),
+                                    OutlinedButton.icon(
+                                      onPressed: () {
+                                        setState(() {
+                                          _almacenSel = '';
+                                          _clienteSel = '';
+                                          _unidadSel = '';
+                                          _productoCtrl.clear();
+                                          _precioCtrl.clear();
+                                          _itemsActuales.clear();
+                                        });
+                                      },
+                                      icon: const Icon(Icons.restart_alt),
+                                      label: const Text('Limpiar'),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    ElevatedButton.icon(
+                                      onPressed: _guardarPedidoActual,
+                                      icon: const Icon(Icons.save),
+                                      label: const Text('Guardar pedido'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF10B981),
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // ================= FILTROS + BÚSQUEDA LISTADO =================
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: _CardWrap(
@@ -281,10 +611,10 @@ class _PedidosScreenState extends State<PedidosScreen> {
                                     SizedBox(
                                       width: fieldWidth,
                                       child: _buildFilterDropdown(
-                                        value: almacenFiltro,
+                                        value: almacenFiltro ?? '',
                                         items: almacenes,
                                         hint: 'Todos los almacenes',
-                                        label: 'Almacén',
+                                        label: 'Almacén (filtro)',
                                         icon: Icons.store_mall_directory_outlined,
                                         onChanged: (v) => setState(() => almacenFiltro = v),
                                       ),
@@ -292,10 +622,10 @@ class _PedidosScreenState extends State<PedidosScreen> {
                                     SizedBox(
                                       width: fieldWidth,
                                       child: _buildFilterDropdown(
-                                        value: clienteFiltro,
+                                        value: clienteFiltro ?? '',
                                         items: clientes,
                                         hint: 'Todos los clientes',
-                                        label: 'Cliente',
+                                        label: 'Cliente (filtro)',
                                         icon: Icons.person_outline,
                                         onChanged: (v) => setState(() => clienteFiltro = v),
                                       ),
@@ -303,10 +633,10 @@ class _PedidosScreenState extends State<PedidosScreen> {
                                     SizedBox(
                                       width: fieldWidth,
                                       child: _buildFilterDropdown(
-                                        value: unidadFiltro,
+                                        value: unidadFiltro ?? '',
                                         items: unidades,
                                         hint: 'Todas las unidades',
-                                        label: 'Unidad',
+                                        label: 'Unidad (filtro)',
                                         icon: Icons.local_shipping_outlined,
                                         onChanged: (v) => setState(() => unidadFiltro = v),
                                       ),
@@ -366,115 +696,108 @@ class _PedidosScreenState extends State<PedidosScreen> {
 
                         const SizedBox(height: 8),
 
-                        // TABLA
-                        Expanded(
+                        // ================= TABLA DE PEDIDOS GUARDADOS =================
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           child: pedidosFiltrados.isEmpty
                               ? _buildEmptyState()
-                              : Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                  child: _CardWrap(
-                                    child: Scrollbar(
+                              : _CardWrap(
+                                  child: Scrollbar(
+                                    controller: _tableHCtrl,
+                                    thumbVisibility: true,
+                                    child: SingleChildScrollView(
+                                      scrollDirection: Axis.horizontal,
                                       controller: _tableHCtrl,
-                                      thumbVisibility: true,
-                                      child: SingleChildScrollView(
-                                        scrollDirection: Axis.horizontal,
-                                        controller: _tableHCtrl,
-                                        child: ConstrainedBox(
-                                          constraints: BoxConstraints(minWidth: w),
-                                          child: DataTable(
-                                            columnSpacing: 24,
-                                            horizontalMargin: 16,
-                                            dataRowMinHeight: 60,
-                                            dataRowMaxHeight: 72,
-                                            headingRowHeight: 56,
-                                            headingRowColor: MaterialStateProperty.resolveWith((_) => const Color(0xFFF1F5F9)),
-                                            headingTextStyle: const TextStyle(color: Color(0xFF334155), fontWeight: FontWeight.w600, fontSize: 14),
-                                            columns: const [
-                                              DataColumn(label: Text('ID')),
-                                              DataColumn(label: Text('Cliente')),
-                                              DataColumn(label: Text('Almacén')),
-                                              DataColumn(label: Text('Unidad')),
-                                              DataColumn(label: Text('Fecha')),
-                                              DataColumn(label: Text('Estado')),
-                                              DataColumn(label: Text('Total', textAlign: TextAlign.end)),
-                                              DataColumn(label: Text('Productos')),
-                                              DataColumn(label: Text('Acciones')),
-                                            ],
-                                            rows: pedidosFiltrados.map((pedido) {
-                                              return DataRow(
-                                                cells: [
-                                                  DataCell(Text('#${pedido['id']}', style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF1E293B)))),
-                                                  DataCell(Text(pedido['cliente']?.toString() ?? 'N/A')),
-                                                  DataCell(Text(pedido['almacen']?.toString() ?? 'N/A')),
-                                                  DataCell(Text(pedido['unidad']?.toString() ?? 'N/A')),
-                                                  DataCell(Text(pedido['fecha']?.toString() ?? 'N/A')),
-                                                  DataCell(
-                                                    InkWell(
-                                                      onTap: () => _toggleEstado(pedido),
-                                                      child: Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                                        decoration: BoxDecoration(color: _getEstadoColor(pedido['estado']).withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
-                                                        child: Row(
-                                                          mainAxisSize: MainAxisSize.min,
-                                                          children: [
-                                                            Icon((pedido['estado'] ?? '') == 'Autorizado' ? Icons.verified : Icons.hourglass_bottom,
-                                                                size: 16, color: _getEstadoColor(pedido['estado'])),
-                                                            const SizedBox(width: 6),
-                                                            Text((pedido['estado'] ?? 'N/A').toString(),
-                                                                style: TextStyle(color: _getEstadoColor(pedido['estado']), fontWeight: FontWeight.w600, fontSize: 12)),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  DataCell(
-                                                    Align(
-                                                      alignment: Alignment.centerRight,
-                                                      child: Text(
-                                                        '\$${(pedido['total'] is num) ? (pedido['total'] as num).toStringAsFixed(2) : '0.00'}',
-                                                        style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF059669)),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  DataCell(
-                                                    Tooltip(
-                                                      message: 'Ver productos',
+                                      child: ConstrainedBox(
+                                        constraints: BoxConstraints(minWidth: w),
+                                        child: DataTable(
+                                          columnSpacing: 24,
+                                          horizontalMargin: 16,
+                                          dataRowMinHeight: 60,
+                                          dataRowMaxHeight: 72,
+                                          headingRowHeight: 56,
+                                          headingRowColor: MaterialStateProperty.resolveWith((_) => const Color(0xFFF1F5F9)),
+                                          headingTextStyle: const TextStyle(color: Color(0xFF334155), fontWeight: FontWeight.w600, fontSize: 14),
+                                          columns: const [
+                                            DataColumn(label: Text('ID')),
+                                            DataColumn(label: Text('Cliente')),
+                                            DataColumn(label: Text('Almacén')),
+                                            DataColumn(label: Text('Unidad')),
+                                            DataColumn(label: Text('Fecha')),
+                                            DataColumn(label: Text('Estado')),
+                                            DataColumn(label: Text('Total')),
+                                            DataColumn(label: Text('Productos')),
+                                            DataColumn(label: Text('Acciones')),
+                                          ],
+                                          rows: pedidosFiltrados.map((pedido) {
+                                            return DataRow(
+                                              cells: [
+                                                DataCell(Text('#${pedido['id']}', style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF1E293B)))),
+                                                DataCell(Text(pedido['cliente']?.toString() ?? 'N/A')),
+                                                DataCell(Text(pedido['almacen']?.toString() ?? 'N/A')),
+                                                DataCell(Text(pedido['unidad']?.toString() ?? 'N/A')),
+                                                DataCell(Text(pedido['fecha']?.toString() ?? 'N/A')),
+                                                DataCell(
+                                                  InkWell(
+                                                    onTap: () => _toggleEstado(pedido),
+                                                    child: Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                      decoration: BoxDecoration(color: _getEstadoColor(pedido['estado']).withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
                                                       child: Row(
+                                                        mainAxisSize: MainAxisSize.min,
                                                         children: [
-                                                          const Icon(Icons.inventory_2, size: 16, color: Color(0xFF3B82F6)),
-                                                          const SizedBox(width: 4),
-                                                          Text('${(pedido['productos'] as List?)?.length ?? 0}', style: const TextStyle(color: Color(0xFF3B82F6))),
+                                                          Icon((pedido['estado'] ?? '') == 'Autorizado' ? Icons.verified : Icons.hourglass_bottom,
+                                                              size: 16, color: _getEstadoColor(pedido['estado'])),
+                                                          const SizedBox(width: 6),
+                                                          Text((pedido['estado'] ?? 'N/A').toString(),
+                                                              style: TextStyle(color: _getEstadoColor(pedido['estado']), fontWeight: FontWeight.w600, fontSize: 12)),
                                                         ],
                                                       ),
                                                     ),
                                                   ),
-                                                  DataCell(
-                                                    Row(
+                                                ),
+                                                DataCell(Text(
+                                                  '\$${(pedido['total'] is num) ? (pedido['total'] as num).toStringAsFixed(2) : '0.00'}',
+                                                  style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF059669)),
+                                                )),
+                                                DataCell(
+                                                  Tooltip(
+                                                    message: 'Ver productos',
+                                                    child: Row(
                                                       children: [
-                                                        IconButton(
-                                                          icon: const Icon(Icons.remove_red_eye, size: 20),
-                                                          color: const Color(0xFF3B82F6),
-                                                          onPressed: () => _mostrarDetallePedido(context, pedido),
-                                                        ),
-                                                        IconButton(
-                                                          icon: const Icon(Icons.attach_money, size: 20),
-                                                          color: const Color(0xFF059669),
-                                                          tooltip: 'Pagar',
-                                                          onPressed: () => _mostrarDetallePedido(context, pedido, abrirPagoDirecto: true),
-                                                        ),
-                                                        IconButton(
-                                                          icon: const Icon(Icons.delete_outline, size: 20),
-                                                          color: const Color(0xFFEF4444),
-                                                          tooltip: 'Eliminar',
-                                                          onPressed: () => _confirmarEliminar(pedido['id']),
-                                                        ),
+                                                        const Icon(Icons.inventory_2, size: 16, color: Color(0xFF3B82F6)),
+                                                        const SizedBox(width: 4),
+                                                        Text('${(pedido['productos'] as List?)?.length ?? 0}', style: const TextStyle(color: Color(0xFF3B82F6))),
                                                       ],
                                                     ),
                                                   ),
-                                                ],
-                                              );
-                                            }).toList(),
-                                          ),
+                                                ),
+                                                DataCell(
+                                                  Row(
+                                                    children: [
+                                                      IconButton(
+                                                        icon: const Icon(Icons.remove_red_eye, size: 20),
+                                                        color: const Color(0xFF3B82F6),
+                                                        onPressed: () => _mostrarDetallePedido(context, pedido),
+                                                      ),
+                                                      IconButton(
+                                                        icon: const Icon(Icons.attach_money, size: 20),
+                                                        color: const Color(0xFF059669),
+                                                        tooltip: 'Pagar',
+                                                        onPressed: () => _mostrarDetallePedido(context, pedido, abrirPagoDirecto: true),
+                                                      ),
+                                                      IconButton(
+                                                        icon: const Icon(Icons.delete_outline, size: 20),
+                                                        color: const Color(0xFFEF4444),
+                                                        tooltip: 'Eliminar',
+                                                        onPressed: () => _confirmarEliminar(pedido['id']),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
+                                            );
+                                          }).toList(),
                                         ),
                                       ),
                                     ),
@@ -506,7 +829,7 @@ class _PedidosScreenState extends State<PedidosScreen> {
         Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF64748B))),
         const SizedBox(height: 6),
         DropdownButtonFormField<String>(
-          value: value,
+          value: (value == null || value.isEmpty) ? '' : value,
           isExpanded: true,
           decoration: InputDecoration(
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
@@ -652,10 +975,8 @@ class _PedidosScreenState extends State<PedidosScreen> {
                     ),
                     const SizedBox(height: 12),
                     const Divider(),
-
                     const SizedBox(height: 12),
                     const Text('SELECCIONA LO QUE COMPRARÁS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF64748B))),
-
                     const SizedBox(height: 10),
                     Expanded(
                       child: Scrollbar(
@@ -716,7 +1037,6 @@ class _PedidosScreenState extends State<PedidosScreen> {
                         ),
                       ),
                     ),
-
                     const SizedBox(height: 12),
                     const Divider(),
                     const SizedBox(height: 8),
@@ -760,6 +1080,138 @@ class _PedidosScreenState extends State<PedidosScreen> {
   }
 }
 
+// ======= Autocomplete de Producto =======
+class _ProductoAutocomplete extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final String hint;
+  const _ProductoAutocomplete({required this.controller, required this.label, required this.hint});
+
+  @override
+  Widget build(BuildContext context) {
+    return Autocomplete<String>(
+      optionsBuilder: (TextEditingValue v) {
+        final q = v.text.toLowerCase().trim();
+        if (q.isEmpty) return const Iterable<String>.empty();
+        return _productosSugeridos.where((p) => p.toLowerCase().contains(q));
+      },
+      onSelected: (s) => controller.text = s,
+      fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
+        // Mantén el controller externo
+        textEditingController.value = controller.value;
+        return TextField(
+          controller: controller,
+          focusNode: focusNode,
+          decoration: InputDecoration(
+            labelText: label,
+            hintText: hint,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+            focusedBorder: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10)), borderSide: BorderSide(color: Color(0xFF3B82F6))),
+            filled: true,
+            fillColor: const Color(0xFFF8FAFC),
+            prefixIcon: const Icon(Icons.search, color: Color(0xFF64748B)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          ),
+          onSubmitted: (_) => onFieldSubmitted(),
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 6,
+            borderRadius: BorderRadius.circular(10),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 240, maxWidth: 400),
+              child: ListView.separated(
+                padding: EdgeInsets.zero,
+                itemCount: options.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final opt = options.elementAt(index);
+                  return ListTile(
+                    dense: true,
+                    title: Text(opt),
+                    onTap: () => onSelected(opt),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ======= Tabla de ítems actuales (cantidad editable) =======
+class _TablaItemsActuales extends StatelessWidget {
+  final List<Map<String, dynamic>> items;
+  final void Function(int) onInc;
+  final void Function(int) onDec;
+  final void Function(int) onRemove;
+
+  const _TablaItemsActuales({required this.items, required this.onInc, required this.onDec, required this.onRemove});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(border: Border.all(color: const Color(0xFFE2E8F0)), borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: const BoxDecoration(color: Color(0xFFF1F5F9)),
+            child: Row(
+              children: const [
+                Expanded(flex: 4, child: Text('Producto', style: TextStyle(fontWeight: FontWeight.w600))),
+                Expanded(flex: 2, child: Text('Unidad', style: TextStyle(fontWeight: FontWeight.w600))),
+                Expanded(flex: 2, child: Text('Precio', style: TextStyle(fontWeight: FontWeight.w600))),
+                Expanded(flex: 3, child: Text('Cantidad', style: TextStyle(fontWeight: FontWeight.w600))),
+                Expanded(flex: 2, child: Text('Total', style: TextStyle(fontWeight: FontWeight.w600), textAlign: TextAlign.right)),
+                SizedBox(width: 40),
+              ],
+            ),
+          ),
+          ...List.generate(items.length, (i) {
+            final it = items[i];
+            final precio = (it['precio'] as num?)?.toDouble() ?? 0.0;
+            final cant = (it['cantidad'] as num?)?.toDouble() ?? 0.0;
+            final total = precio * cant;
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9)))),
+              child: Row(
+                children: [
+                  Expanded(flex: 4, child: Text(it['nombre']?.toString() ?? '')),
+                  Expanded(flex: 2, child: Text(it['unidad']?.toString() ?? '')),
+                  Expanded(flex: 2, child: Text('\$${precio.toStringAsFixed(2)}')),
+                  Expanded(
+                    flex: 3,
+                    child: Row(
+                      children: [
+                        IconButton(onPressed: () => onDec(i), icon: const Icon(Icons.remove_circle_outline)),
+                        Text(cant.toStringAsFixed(cant % 1 == 0 ? 0 : 2)),
+                        IconButton(onPressed: () => onInc(i), icon: const Icon(Icons.add_circle_outline)),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Text('\$${total.toStringAsFixed(2)}', textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                  IconButton(onPressed: () => onRemove(i), icon: const Icon(Icons.delete_outline, color: Color(0xFFEF4444)), tooltip: 'Quitar'),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
 // ======= Título moderno =======
 class _HeaderTitlePedidos extends StatelessWidget {
   const _HeaderTitlePedidos();
@@ -782,7 +1234,7 @@ class _HeaderTitlePedidos extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _GradientText('Pedidos', gradient: LinearGradient(colors: [a, b]), style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: 0.2)),
-              Text('Consulta, filtra y gestiona tus pedidos', style: TextStyle(color: Colors.grey.shade600, fontSize: 13.5)),
+              Text('Arma pedidos rápidos y gestiona pagos', style: TextStyle(color: Colors.grey.shade600, fontSize: 13.5)),
             ],
           ),
         ),
